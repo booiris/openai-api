@@ -1,0 +1,1 @@
+ref: [openai-api-rust](https://github.com/deontologician/openai-api-rust/)
