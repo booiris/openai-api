@@ -18,30 +18,29 @@ pub mod api {
         pub data: Vec<T>,
     }
 
-    /// Detailed information on a particular engine.
+    /// Detailed information on a particular model.
     #[derive(Deserialize, Debug, Eq, PartialEq, Clone)]
-    pub struct EngineInfo {
-        /// The name of the engine, e.g. `"davinci"` or `"ada"`
+    pub struct ModelInfo {
+        /// The name of the model, e.g. `"davinci"` or `"ada"`
         pub id: String,
         /// The owner of the model. Usually (always?) `"openai"`
-        pub owner: String,
-        /// Whether the model is ready for use. Usually (always?) `true`
-        pub ready: bool,
+        pub owned_by: String,
+        ///  Usually (always?) `"model"`
+        pub object: String,
     }
 
     #[derive(Serialize, Debug, Builder, Clone)]
     #[builder(pattern = "immutable")]
     pub struct CompletionArgs {
-        /// The id of the engine to use for this request
+        /// The id of the model to use for this request
         ///
         /// # Example
         /// ```
         /// # use openai_api::api::CompletionArgs;
-        /// CompletionArgs::builder().engine("davinci");
+        /// CompletionArgs::builder().model("text-davinci-003");
         /// ```
-        #[builder(setter(into), default = "\"davinci\".into()")]
-        #[serde(skip_serializing)]
-        pub(super) engine: String,
+        #[builder(setter(into), default = "\"text-davinci-003\".into()")]
+        pub(super) model: String,
         /// The prompt to complete from.
         ///
         /// Defaults to `"<|endoftext|>"` which is a special token seen during training.
@@ -266,24 +265,24 @@ impl Client {
         }
     }
 
-    /// Lists the currently available engines.
+    /// Lists the currently available models.
     ///
     /// Provides basic information about each one such as the owner and availability.
     ///
     /// # Errors
     /// - `Error::APIError` if the server returns an error
-    pub async fn engines(&self) -> Result<Vec<api::EngineInfo>> {
-        self.get("engines").await.map(|r: api::Container<_>| r.data)
+    pub async fn models(&self) -> Result<Vec<api::ModelInfo>> {
+        self.get("models").await.map(|r: api::Container<_>| r.data)
     }
 
-    /// Retrieves an engine instance
+    /// Retrieves an model instance
     ///
-    /// Provides basic information about the engine such as the owner and availability.
+    /// Provides basic information about the model such as the owner and availability.
     ///
     /// # Errors
     /// - `Error::APIError` if the server returns an error
-    pub async fn engine(&self, engine: &str) -> Result<api::EngineInfo> {
-        self.get(&format!("engines/{}", engine)).await
+    pub async fn model(&self, model: &str) -> Result<api::ModelInfo> {
+        self.get(&format!("models/{}", model)).await
     }
 
     // Private helper to generate post requests. Needs to be a bit more flexible than
@@ -315,9 +314,7 @@ impl Client {
         prompt: impl Into<api::CompletionArgs>,
     ) -> Result<api::Completion> {
         let args = prompt.into();
-        Ok(self
-            .post(&format!("engines/{}/completions", args.engine), args)
-            .await?)
+        Ok(self.post("completions", args).await?)
     }
 }
 
@@ -327,7 +324,7 @@ mod unit {
     use mockito::Mock;
 
     use crate::{
-        api::{self, Completion, CompletionArgs, EngineInfo},
+        api::{self, Completion, CompletionArgs, ModelInfo},
         Client, Error,
     };
 
@@ -344,27 +341,26 @@ mod unit {
     }
 
     #[test]
-    fn parse_engine_info() -> Result<(), Box<dyn std::error::Error>> {
+    fn parse_model_info() -> Result<(), Box<dyn std::error::Error>> {
         let example = r#"{
             "id": "ada",
-            "object": "engine",
-            "owner": "openai",
-            "ready": true
+            "object": "model",
+            "owned_by": "openai"
         }"#;
-        let ei: api::EngineInfo = serde_json::from_str(example)?;
+        let ei: api::ModelInfo = serde_json::from_str(example)?;
         assert_eq!(
             ei,
-            api::EngineInfo {
+            api::ModelInfo {
                 id: "ada".into(),
-                owner: "openai".into(),
-                ready: true,
+                owned_by: "openai".into(),
+                object: "model".into(),
             }
         );
         Ok(())
     }
 
-    fn mock_engines() -> (Mock, Vec<EngineInfo>) {
-        let mock = mockito::mock("GET", "/engines")
+    fn mock_models() -> (Mock, Vec<ModelInfo>) {
+        let mock = mockito::mock("GET", "/models")
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(
@@ -373,90 +369,32 @@ mod unit {
             "data": [
               {
                 "id": "ada",
-                "object": "engine",
-                "owner": "openai",
-                "ready": true
-              },
-              {
-                "id": "babbage",
-                "object": "engine",
-                "owner": "openai",
-                "ready": true
-              },
-              {
-                "id": "experimental-engine-v7",
-                "object": "engine",
-                "owner": "openai",
-                "ready": false
-              },
-              {
-                "id": "curie",
-                "object": "engine",
-                "owner": "openai",
-                "ready": true
-              },
-              {
-                "id": "davinci",
-                "object": "engine",
-                "owner": "openai",
-                "ready": true
-              },
-              {
-                 "id": "content-filter-alpha-c4",
-                 "object": "engine",
-                 "owner": "openai",
-                 "ready": true
+                "object": "model",
+                "owned_by": "openai"
               }
             ]
           }"#,
             )
             .create();
 
-        let expected = vec![
-            EngineInfo {
-                id: "ada".into(),
-                owner: "openai".into(),
-                ready: true,
-            },
-            EngineInfo {
-                id: "babbage".into(),
-                owner: "openai".into(),
-                ready: true,
-            },
-            EngineInfo {
-                id: "experimental-engine-v7".into(),
-                owner: "openai".into(),
-                ready: false,
-            },
-            EngineInfo {
-                id: "curie".into(),
-                owner: "openai".into(),
-                ready: true,
-            },
-            EngineInfo {
-                id: "davinci".into(),
-                owner: "openai".into(),
-                ready: true,
-            },
-            EngineInfo {
-                id: "content-filter-alpha-c4".into(),
-                owner: "openai".into(),
-                ready: true,
-            },
-        ];
+        let expected = vec![ModelInfo {
+            id: "ada".into(),
+            owned_by: "openai".into(),
+            object: "model".into(),
+        }];
         (mock, expected)
     }
 
     #[tokio::test]
-    async fn parse_engines() -> crate::Result<()> {
-        let (_m, expected) = mock_engines();
-        let response = mocked_client().engines().await?;
+    async fn parse_models() -> crate::Result<()> {
+        let (_m, expected) = mock_models();
+        let response = mocked_client().models().await?;
         assert_eq!(response, expected);
         Ok(())
     }
 
-    fn mock_engine() -> (Mock, api::ErrorMessage) {
-        let mock = mockito::mock("GET", "/engines/davinci")
+    fn mock_model() -> (Mock, api::ErrorMessage) {
+        let mock = mockito::mock("GET", "/models/davinci")
             .with_status(404)
             .with_header("content-type", "application/json")
             .with_body(
@@ -477,9 +415,9 @@ mod unit {
     }
 
     #[tokio::test]
-    async fn engine_error_response() -> crate::Result<()> {
-        let (_m, expected) = mock_engine();
-        let response = mocked_client().engine("davinci").await;
+    async fn model_error_response() -> crate::Result<()> {
+        let (_m, expected) = mock_model();
+        let response = mocked_client().model("text-davinci-003").await;
         if let Result::Err(Error::Api(msg)) = response {
             assert_eq!(expected, msg);
         }
@@ -487,7 +425,7 @@ mod unit {
     }
 
     fn mock_completion() -> crate::Result<(Mock, CompletionArgs, Completion)> {
-        let mock = mockito::mock("POST", "/engines/davinci/completions")
+        let mock = mockito::mock("POST", "/completions")
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(
@@ -509,7 +447,7 @@ mod unit {
             .expect(1)
             .create();
         let args = api::CompletionArgs::builder()
-            .engine("davinci")
+            .model("text-davinci-003")
             .prompt("Once upon a time")
             .max_tokens(5)
             .temperature(1.0)
@@ -572,22 +510,22 @@ mod integration {
     }
 
     #[tokio::test]
-    async fn can_get_engines() -> crate::Result<()> {
+    async fn can_get_models() -> crate::Result<()> {
         let client = get_client();
-        client.engines().await?;
+        client.models().await?;
         Ok(())
     }
 
-    fn assert_engine_correct(engine_id: &str, info: api::EngineInfo) {
-        assert_eq!(info.id, engine_id);
-        assert!(info.ready);
-        assert_eq!(info.owner, "openai");
+    fn assert_model_correct(model_id: &str, info: api::ModelInfo) {
+        assert_eq!(info.id, model_id);
+        assert_eq!(info.object, "model");
+        assert_eq!(info.owned_by, "openai");
     }
 
     #[tokio::test]
-    async fn can_get_engine() -> crate::Result<()> {
+    async fn can_get_model() -> crate::Result<()> {
         let client = get_client();
-        assert_engine_correct("ada", client.engine("ada").await?);
+        assert_model_correct("text-ada-001", client.model("text-ada-001").await?);
         Ok(())
     }
 
