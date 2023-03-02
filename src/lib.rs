@@ -212,7 +212,7 @@ pub mod api {
 
     /// The main input is the messages parameter. Messages must be an array of message objects, where each object has a role (either “system”, “user”, or “assistant”) and content (the content of the message). Conversations can be as short as 1 message or fill many pages.
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-    pub struct MsgFormat {
+    pub struct ChatFormat {
         /// Example
         /// messages=[
         ///     {"role": "system", "content": "You are a helpful assistant."},
@@ -233,7 +233,13 @@ pub mod api {
         pub content: String,
     }
 
-    impl std::fmt::Display for MsgFormat {
+    impl ChatFormat {
+        pub fn new(role: ChatRole, content: String) -> Self {
+            Self { role, content }
+        }
+    }
+
+    impl std::fmt::Display for ChatFormat {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             write!(f, "role: {:?}, content: {}", self.role, self.content)
         }
@@ -261,7 +267,7 @@ pub mod api {
         /// ChatArgs::builder().messages(vec![MsgFormat{role: ChatRole::System, content: "You are a helpful assistant.".into()}]);
         /// ```
         #[builder(default)]
-        messages: Vec<MsgFormat>,
+        messages: Vec<ChatFormat>,
         /// Maximum number of tokens to complete.
         /// The maximum number of tokens allowed for the generated answer. By default, the number of tokens the model can return will be (4096 - prompt tokens).
         ///
@@ -341,7 +347,7 @@ pub mod api {
         fn from(msg: Vec<(ChatRole, String)>) -> Self {
             let msg = msg
                 .into_iter()
-                .map(|(role, content)| MsgFormat { role, content })
+                .map(|(role, content)| ChatFormat { role, content })
                 .collect();
             Self {
                 messages: msg,
@@ -380,7 +386,7 @@ pub mod api {
     #[derive(Deserialize, Debug, Clone)]
     pub struct ChatChoice {
         /// The text of the completion. Will contain the prompt if echo is True.
-        pub message: MsgFormat,
+        pub message: ChatFormat,
         /// Offset in the result where the completion began. Useful if using echo.
         pub index: u64,
         /// Why the completion ended when it did
@@ -527,7 +533,7 @@ mod unit {
 
     use crate::{
         api::{
-            self, ChatAnswer, ChatArgs, ChatRole, Completion, CompletionArgs, ModelInfo, MsgFormat,
+            self, ChatAnswer, ChatArgs, ChatFormat, ChatRole, Completion, CompletionArgs, ModelInfo,
         },
         Client, Error,
     };
@@ -721,7 +727,7 @@ mod unit {
             .create();
         let args = api::ChatArgs::builder()
             .model("gpt-3.5-turbo")
-            .messages(vec![MsgFormat {
+            .messages(vec![ChatFormat {
                 role: ChatRole::System,
                 content: "You are a helpful assistant.".into(),
             }])
@@ -736,7 +742,7 @@ mod unit {
             id: "cmpl-uqkvlQyYK7bGYrRHQ0eXlWi7".into(),
             created: 1589478378,
             choices: vec![api::ChatChoice {
-                message: MsgFormat {
+                message: ChatFormat {
                     role: ChatRole::Assistant,
                     content: "\n\nHello there, how may I assist you today?".into(),
                 },
@@ -869,7 +875,7 @@ A:"#,
 
     fn stop_chat_args() -> api::ChatArgs {
         api::ChatArgs::builder()
-            .messages(vec![api::MsgFormat {
+            .messages(vec![api::ChatFormat {
                 role: api::ChatRole::System,
                 content: "Hello there, how may I assist you today?".into(),
             }])
