@@ -276,8 +276,8 @@ pub mod api {
         /// # use openai_api::api::ChatArgs;
         /// ChatArgs::builder().max_tokens(64);
         /// ```
-        #[builder(default = "32")]
-        max_tokens: u64,
+        #[builder(setter(strip_option), default)]
+        max_tokens: Option<u64>,
         /// What sampling temperature to use.
         ///
         /// Default is `1.0`
